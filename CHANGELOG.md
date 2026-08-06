@@ -38,8 +38,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   category (MCP is a tool/resource protocol exposed to LLM clients, not an inference proxy
   like the `gateway` probes) so downstream consumers can route it to MCP-specific handling.
 
+### Added
+
+- **`GeneratorConfig.extra`** (`map[string]string`): a generic passthrough for
+  generator-type-specific config keys that have no dedicated field (the existing
+  fields are shaped for HTTP/REST LLM generators). Values support the same
+  `$TARGET`/`$MODEL` substitution as the typed fields (with the same zero-model
+  caveat as the typed fields: `$MODEL` is only substituted when the probe declares
+  `models:`).
+
 ### Changed
 
+- **mcp-server** now carries an `augustus:` section, so `--augustus` emits a ready
+  MCP generator config (`type: mcp`, `endpoint: $TARGET`, `extra: {transport: auto,
+  mode: list_tools}`). Consumers (e.g. Guard's augustus capability) no longer need to
+  fabricate the MCP scan config from the fingerprint.
 - Probe requests may now use an empty `path` to target the supplied URL exactly
   (`target + "" = target`), letting a probe classify the URL it is handed rather than a
   fixed sub-path. Probe validation updated accordingly.
