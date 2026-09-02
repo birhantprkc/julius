@@ -1,24 +1,20 @@
 # AGENTS.md
 
-This is the canonical agent instruction file for this repository. It provides guidance to any coding agent working with this code — Claude Code, Codex, and Gemini all load it. `CLAUDE.md` is a one-line pointer to this file, and `.gemini/settings.json` names it for Gemini.
-
-## Project Overview
-
-Julius is an LLM service fingerprinting tool that identifies what AI server software (Ollama, vLLM, LiteLLM, etc.) is running on network endpoints. It sends HTTP probes and matches response signatures to identify 17+ LLM services.
+This is the canonical agent instruction file for this repository, read by every coding agent that works here. `CLAUDE.md` is a one-line pointer to this file, and `.gemini/settings.json` lists it as a context file. Architecture notes and the probe/rule reference that used to live here are in `docs/agents/architecture.md`; `README.md` and `CONTRIBUTING.md` carry the user-facing versions.
 
 ## Development Commands
 
 ```bash
-# Run all tests
+# Run all tests (also: make test)
 go test ./...
 
 # Run tests for a specific package
 go test ./pkg/rules/...
 
-# Build the binary
+# Build the binary (make build writes to bin/julius instead)
 go build -o julius ./cmd/julius
 
-# Validate probe YAML files
+# Validate probe YAML files (schema-only; exactly one directory argument)
 julius validate ./probes
 
 # Run the per-probe behavioral fixture harness (subset of `go test ./...`)
@@ -27,67 +23,24 @@ go test ./pkg/scanner/...
 # Test against a target
 ./julius probe https://target.example.com
 
-# Verbose output for debugging
+# Verbose output for debugging (-q suppresses non-match output)
 ./julius probe -v https://target.example.com
 ```
 
-## Architecture
+`make help` lists the remaining `Makefile` targets (`make lint` runs golangci-lint, the same linter CI runs).
 
-### Core Flow
-1. Target URLs are normalized and validated
-2. Probes are loaded (embedded YAML + optional filesystem probes)
-3. Scanner sends HTTP requests with response caching (`singleflight` + MD5 dedup)
-4. Rules match against HTTP responses (status, body, headers)
-5. Results are ranked by specificity (1-100, higher = more specific match)
-6. Models are optionally extracted via JQ expressions
-
-### Key Packages
-
-- **`pkg/runner/`** - CLI command implementations (probe, list, validate)
-- **`pkg/scanner/`** - HTTP client, response caching, model extraction
-- **`pkg/rules/`** - Match rule engine with plugin-style registration
-- **`pkg/probe/`** - Probe loader (embedded + filesystem YAML)
-- **`pkg/types/`** - Core data structures (Probe, Request, Result)
-- **`pkg/output/`** - Output formatters (table, JSON, JSONL)
-
-### Rule System
-
-Rules are registered via `init()` functions in `pkg/rules/rule_*.go` files:
-
-```go
-func init() {
-    Register("body.contains", NewBodyContainsRule)
-}
-```
-
-To add a new rule type:
-1. Create `pkg/rules/rule_<name>.go` implementing the `Rule` interface
-2. Register it in `init()` with a unique type name
-3. Add tests in `pkg/rules/rules_test.go`
-
-Available rule types: `status`, `body.contains`, `body.prefix`, `header.contains`, `header.prefix`, `content-type`
-
-### Probe YAML Structure
-
-Probes in `probes/` define service detection. Key fields:
-
-- `name` - Unique identifier (must match filename)
-- `specificity` - 1-100 ranking (100=exact match, 50=default, 1=generic fallback)
-- `require` - `any` (default, first match wins) or `all` (all requests must match)
-- `requests` - HTTP probes with match rules
-- `models` - Optional JQ extraction config for model discovery
-- `augustus` - Optional generator config for downstream tooling
-
-### Probe Fixtures
+## Probe Fixtures
 
 Every shipped probe must have a companion behavioral fixture in
 `pkg/scanner/testdata/fixtures/<probe>.yaml` with **at least one positive and
 one negative case**. The harness (`pkg/scanner/fixture_test.go`) serves canned
 HTTP responses and runs the real probe through the real scanner to assert match
 behavior; `TestEveryProbeHasFixture` fails the build if any probe lacks a
-fixture. When adding a probe, add its fixture — see
-`pkg/scanner/testdata/fixtures/README.md`.
+fixture or lacks either case. When adding a probe, add its fixture — see
+`pkg/scanner/testdata/fixtures/README.md` for the format. `CONTRIBUTING.md`
+and the pull-request template describe only manual live-service testing and do
+not mention this requirement, so do not treat their checklists as complete.
 
-## Local Files
-
-See `local/CLAUDE.md` for documentation on local research files (gitignored, may vary per developer).
+The fixture is keyed by the probe's `name` field, not its filename. `julius
+validate` does not check that `name` matches the filename; that remains a
+convention (see `docs/agents/architecture.md`).
